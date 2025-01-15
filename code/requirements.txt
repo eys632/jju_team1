@@ -4,3 +4,4 @@ tiktoken
 langchain_experimental
 langchain_openai
 langchain_core
+langchain-community
