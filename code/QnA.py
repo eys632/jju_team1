@@ -29,7 +29,7 @@ def run_qna():
     
     # 3) GPT 모델 초기화 (ChatGPT 계열)
     chat_model = ChatOpenAI(
-        model_name="gpt-4",  # "gpt-4o" → "gpt-4"로 수정
+        model_name="gpt-4o",
         temperature=0.0
     )
     
