@@ -8,39 +8,36 @@ from utils.helper_functions import preprocess_text
 # 환경 변수 로드
 load_dotenv()
 
-# 메인 함수
 def main():
     st.set_page_config(page_title="논문 Q&A 시스템", layout="wide")
     st.title("📄 논문 Q&A 시스템")
 
-    # Custom CSS 추가
+    # Custom CSS 추가: 입력창 하단 고정
     st.markdown("""
         <style>
-        /* 전체 레이아웃 */
+        /* 전체 페이지 레이아웃 */
         .main-container {
             display: flex;
             flex-direction: column;
             height: 100vh;
         }
-        /* 스크롤 가능한 질문 내역 */
+        /* 스크롤 가능한 콘텐츠 */
         .scrollable-content {
             flex: 1;
             overflow-y: auto;
             padding: 10px;
-            border: 1px solid #ddd;
-            border-radius: 10px;
-            margin-bottom: 80px; /* 하단 입력창 공간 확보 */
+            margin-bottom: 80px; /* 하단 입력창 공간 */
         }
-        /* 고정된 하단 입력창 */
+        /* 고정된 하단 바 */
         .fixed-footer {
             position: fixed;
             bottom: 0;
             left: 0;
             width: 100%;
-            background-color: #f9f9f9;
+            background-color: #f8f9fa;
             padding: 10px;
             border-top: 1px solid #ddd;
-            box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
+            z-index: 1000;
         }
         </style>
     """, unsafe_allow_html=True)
@@ -74,7 +71,7 @@ def main():
             st.sidebar.error(f"⚠️ PDF 로딩 오류: {e}")
             return
 
-    # 질문 내역 스크롤 영역
+    # 스크롤 가능한 콘텐츠
     st.markdown('<div class="scrollable-content">', unsafe_allow_html=True)
     for message in st.session_state.messages:
         if message["type"] == "user":
@@ -127,14 +124,11 @@ def main():
     # 고정된 하단 바 추가
     st.markdown("""
         <div class="fixed-footer">
-            <form action="#" method="post">
-    """, unsafe_allow_html=True)
-
-    with st.form("question_form", clear_on_submit=True):
-        st.text_input("질문을 입력하세요", placeholder="논문에 대해 궁금한 점을 입력하세요...", key="user_input")
-        submitted = st.form_submit_button("📤 질문하기", on_click=handle_question)
-
-    st.markdown("""
+            <form action="#">
+                <div style="display: flex; gap: 10px;">
+                    <input type="text" id="user_input" name="user_input" placeholder="질문을 입력하세요" style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 1rem;">
+                    <button type="submit" style="padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">📤 질문하기</button>
+                </div>
             </form>
         </div>
     """, unsafe_allow_html=True)
