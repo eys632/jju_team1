@@ -13,6 +13,12 @@ def main():
     st.set_page_config(page_title="논문 Q&A 시스템", layout="wide")
     st.title("📄 논문 Q&A 시스템")
 
+    # Session State 초기화
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+    if "user_input" not in st.session_state:
+        st.session_state.user_input = ""
+
     # Sidebar - 파일 업로드
     st.sidebar.title("📂 논문 업로드")
     uploaded_file = st.sidebar.file_uploader("PDF 파일을 업로드하세요", type=["pdf"])
@@ -40,10 +46,6 @@ def main():
     # 채팅 UI 설정
     st.write("### 💬 논문과 대화하기")
 
-    # 대화 저장 상태 초기화
-    if "messages" not in st.session_state:
-        st.session_state.messages = []
-
     # 채팅 기록 표시
     for message in st.session_state.messages:
         if message["type"] == "user":
@@ -65,7 +67,7 @@ def main():
 
     # Enter로 질문 처리
     def handle_question():
-        question = st.session_state["user_input"]
+        question = st.session_state.user_input
         if not question.strip():
             st.warning("⚠️ 질문을 입력해 주세요.")
             return
@@ -93,11 +95,11 @@ def main():
             st.error(f"⚠️ 답변 생성 중 오류: {e}")
 
         # 입력창 초기화
-        st.session_state["user_input"] = ""
+        st.session_state.user_input = ""
 
     # 입력창 (Enter로 자동 처리)
     with st.form("question_form", clear_on_submit=True):
-        user_input = st.text_input("질문을 입력하세요", placeholder="논문에 대해 궁금한 점을 입력하세요...", key="user_input")
+        st.text_input("질문을 입력하세요", placeholder="논문에 대해 궁금한 점을 입력하세요...", key="user_input")
         submitted = st.form_submit_button("📤 질문하기")
 
         # 질문 처리 호출
