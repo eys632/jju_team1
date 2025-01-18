@@ -95,13 +95,14 @@ def main():
         # 입력창 초기화
         st.session_state["user_input"] = ""
 
-        # 새로고침 없이 메시지 업데이트
-        st.experimental_rerun()
-
     # 입력창 (Enter로 자동 처리)
     with st.form("question_form", clear_on_submit=True):
         user_input = st.text_input("질문을 입력하세요", placeholder="논문에 대해 궁금한 점을 입력하세요...", key="user_input")
-        submitted = st.form_submit_button("📤 질문하기", on_click=handle_question)
+        submitted = st.form_submit_button("📤 질문하기")
+
+        # 질문 처리 호출
+        if submitted:
+            handle_question()
 
 if __name__ == "__main__":
     main()
