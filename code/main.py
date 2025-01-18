@@ -7,9 +7,9 @@ from loaders.secure_file_loader import SecureFileLoader
 from services.qna_service import QnAService
 from utils.helper_functions import preprocess_text
 from functools import lru_cache
-from werkzeug.utils import secure_filename
 import magic  # 파일 MIME 타입 확인을 위해 필요
 import shutil
+import re  # 정규표현식 사용
 
 # 환경 변수 로드
 load_dotenv()
@@ -47,6 +47,12 @@ def validate_pdf(file_path):
         logging.error(f"파일 검증 중 오류 발생: {e}")
         return False
 
+def secure_filename_custom(filename):
+    """
+    파일명에서 안전하지 않은 문자를 제거하는 함수
+    """
+    return re.sub(r'[^A-Za-z0-9_.-]', '_', filename)
+
 def main():
     st.set_page_config(page_title="📄 논문 GPT", layout="wide")
     st.title("📄 논문 GPT")
@@ -64,7 +70,7 @@ def main():
     uploaded_file = st.sidebar.file_uploader("PDF 파일을 업로드하세요", type=["pdf"])
 
     if uploaded_file is not None:
-        filename = secure_filename(uploaded_file.name)
+        filename = secure_filename_custom(uploaded_file.name)
         try:
             with tempfile.TemporaryDirectory() as tmpdirname:
                 file_path = os.path.join(tmpdirname, filename)
@@ -81,7 +87,7 @@ def main():
 
                     # PDF 텍스트 로딩 (캐싱 사용)
                     try:
-                        with st.sidebar.spinner("📄 PDF 로딩 중..."):
+                        with st.spinner("📄 PDF 로딩 중..."):
                             loader = SecureFileLoader()
                             pdf_text = load_pdf_cached(loader, file_path)
                         st.session_state.pdf_text = pdf_text
