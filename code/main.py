@@ -62,10 +62,6 @@ def main():
         st.session_state.qna_service = None
     if "pdf_text" not in st.session_state:
         st.session_state.pdf_text = ""
-    if "generating_answer" not in st.session_state:
-        st.session_state.generating_answer = False
-    if "pending_question" not in st.session_state:
-        st.session_state.pending_question = None
 
     # Sidebar - 파일 업로드
     st.sidebar.title("📂 논문 업로드")
@@ -133,48 +129,36 @@ def main():
             st.session_state.messages.append({"type": "user", "content": question})
             logging.info(f"질문 추가: {question}")
 
-            # 답변 생성 중 상태 설정 및 질문 저장
-            st.session_state.generating_answer = True
-            st.session_state.pending_question = question
-
-            # 애플리케이션 재실행
-            st.experimental_rerun()
+            # 답변 생성 중 표시 (스피너가 입력창 위에 나타나도록)
+            with st.container():
+                with st.spinner("🕒 답변을 생성 중입니다..."):
+                    answer = qna_service.get_answer(preprocess_text(question))
+                # 답변 추가
+                st.session_state.messages.append({"type": "assistant", "content": answer})
+                logging.info(f"답변 추가: {answer}")
 
         except Exception as e:
             st.error("⚠️ 답변 생성 중 오류가 발생했습니다.")
             logging.error(f"답변 생성 오류: {e}")
 
-    # 답변 생성 및 메시지 추가
-    if st.session_state.generating_answer and st.session_state.pending_question:
-        with st.spinner("🕒 답변을 생성 중입니다..."):
-            try:
-                answer = st.session_state.qna_service.get_answer(preprocess_text(st.session_state.pending_question))
-                st.session_state.messages.append({"type": "assistant", "content": answer})
-                logging.info(f"답변 추가: {answer}")
-            except Exception as e:
-                st.error("⚠️ 답변 생성 중 오류가 발생했습니다.")
-                logging.error(f"답변 생성 오류: {e}")
-            finally:
-                st.session_state.generating_answer = False
-                st.session_state.pending_question = None
-                st.experimental_rerun()
+    # Handle user input
+    user_input = st.chat_input("질문을 입력하세요...")
+    if user_input:
+        handle_question(user_input)
 
     # 채팅 메시지 표시
     with st.container():
+        # 스피너를 입력창 위에 위치시키기 위해, 스피너 호출을 메시지 렌더링 전에 위치시킵니다.
+        # 하지만 스피너는 handle_question 내에서 사용되므로, 이 부분은 빈 컨테이너로 유지합니다.
+        # 따라서, 스피너가 입력창 위에 나타나지 않을 수 있습니다.
+        # Streamlit의 동기적 실행 특성상, 스피너 위치를 정확히 제어하기는 어렵습니다.
+
+        # 메시지 렌더링
         for message in st.session_state.messages:
             if message["type"] == "user":
                 st.markdown(f"**👤 질문:** {message['content']}")
             else:
                 st.markdown(f"**🤖 답변:** {message['content']}")
-
-    # **스피너를 입력창 위에 표시하기 위한 레이아웃 조정**
-    # 답변 생성 중일 때 스피너가 메시지 위에 표시됩니다.
-    # 이미 위에서 처리했으므로 별도의 스피너 표시 필요 없음
-
-    # 하단 고정 입력 창
-    user_input = st.chat_input("질문을 입력하세요...")
-    if user_input:
-        handle_question(user_input)
 
     # 파일 업로드 후 임시 디렉토리 정리
     # tempfile.TemporaryDirectory()는 with 블록을 벗어나면 자동으로 삭제되므로 별도 처리 필요 없음
