@@ -49,8 +49,7 @@ def main():
                 st.markdown(message["content"])
 
     # 질문 처리 함수
-    def handle_question():
-        question = st.session_state.user_input
+    def handle_question(question):
         if not question.strip():
             st.warning("⚠️ 질문을 입력해 주세요.")
             return
@@ -75,13 +74,12 @@ def main():
         except Exception as e:
             st.error(f"⚠️ 답변 생성 중 오류: {e}")
 
-        st.session_state.user_input = ""
-
     # 하단 고정 입력 창
     user_input = st.chat_input("질문을 입력하세요...")
     if user_input:
-        st.session_state.user_input = user_input
-        handle_question()
+        st.session_state.messages.append({"type": "user", "content": user_input})  # 사용자 메시지 추가
+        handle_question(user_input)  # 질문 처리
+        st.experimental_rerun()  # 상태 업데이트 후 즉시 페이지 갱신
 
 if __name__ == "__main__":
     main()
