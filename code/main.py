@@ -12,41 +12,9 @@ def main():
     st.set_page_config(page_title="논문 Q&A 시스템", layout="wide")
     st.title("📄 논문 Q&A 시스템")
 
-    # Custom CSS 추가: 입력창 하단 고정
-    st.markdown("""
-        <style>
-        /* 전체 페이지 레이아웃 */
-        .main-container {
-            display: flex;
-            flex-direction: column;
-            height: 100vh;
-        }
-        /* 스크롤 가능한 콘텐츠 */
-        .scrollable-content {
-            flex: 1;
-            overflow-y: auto;
-            padding: 10px;
-            margin-bottom: 80px; /* 하단 입력창 공간 */
-        }
-        /* 고정된 하단 바 */
-        .fixed-footer {
-            position: fixed;
-            bottom: 0;
-            left: 0;
-            width: 100%;
-            background-color: #f8f9fa;
-            padding: 10px;
-            border-top: 1px solid #ddd;
-            z-index: 1000;
-        }
-        </style>
-    """, unsafe_allow_html=True)
-
     # Session State 초기화
     if "messages" not in st.session_state:
         st.session_state.messages = []
-    if "user_input" not in st.session_state:
-        st.session_state.user_input = ""
 
     # Sidebar - 파일 업로드
     st.sidebar.title("📂 논문 업로드")
@@ -72,25 +40,13 @@ def main():
             return
 
     # 스크롤 가능한 콘텐츠
-    st.markdown('<div class="scrollable-content">', unsafe_allow_html=True)
     for message in st.session_state.messages:
         if message["type"] == "user":
-            st.markdown(f"""
-            <div style="text-align: right; margin: 10px 0;">
-                <div style="display: inline-block; padding: 10px; border-radius: 10px; background-color: #dcf8c6;">
-                    {message["content"]}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
+            with st.chat_message("user"):
+                st.markdown(message["content"])
         else:
-            st.markdown(f"""
-            <div style="text-align: left; margin: 10px 0;">
-                <div style="display: inline-block; padding: 10px; border-radius: 10px; background-color: #f1f0f0;">
-                    {message["content"]}
-                </div>
-            </div>
-            """, unsafe_allow_html=True)
-    st.markdown('</div>', unsafe_allow_html=True)
+            with st.chat_message("assistant"):
+                st.markdown(message["content"])
 
     # 질문 처리 함수
     def handle_question():
@@ -115,23 +71,17 @@ def main():
         try:
             answer = qna_service.get_answer(preprocess_text(question))
             st.session_state.messages.append({"type": "user", "content": question})
-            st.session_state.messages.append({"type": "bot", "content": answer})
+            st.session_state.messages.append({"type": "assistant", "content": answer})
         except Exception as e:
             st.error(f"⚠️ 답변 생성 중 오류: {e}")
 
         st.session_state.user_input = ""
 
-    # 고정된 하단 바 추가
-    st.markdown("""
-        <div class="fixed-footer">
-            <form action="#">
-                <div style="display: flex; gap: 10px;">
-                    <input type="text" id="user_input" name="user_input" placeholder="질문을 입력하세요" style="flex: 1; padding: 10px; border: 1px solid #ccc; border-radius: 5px; font-size: 1rem;">
-                    <button type="submit" style="padding: 10px 20px; background-color: #007bff; color: white; border: none; border-radius: 5px; cursor: pointer;">📤 질문하기</button>
-                </div>
-            </form>
-        </div>
-    """, unsafe_allow_html=True)
+    # 하단 고정 입력 창
+    user_input = st.chat_input("질문을 입력하세요...")
+    if user_input:
+        st.session_state.user_input = user_input
+        handle_question()
 
 if __name__ == "__main__":
     main()
