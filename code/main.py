@@ -13,30 +13,34 @@ def main():
     st.set_page_config(page_title="논문 Q&A 시스템", layout="wide")
     st.title("📄 논문 Q&A 시스템")
 
-    # Custom CSS 스타일 추가
+    # Custom CSS 추가
     st.markdown("""
         <style>
-        /* 전체 페이지를 Flex 컨테이너로 설정 */
-        .main {
+        /* 전체 레이아웃 */
+        .main-container {
             display: flex;
             flex-direction: column;
             height: 100vh;
         }
-        /* 콘텐츠 영역을 Flex 아이템으로 설정하고 스크롤 가능하게 함 */
-        .content {
+        /* 스크롤 가능한 질문 내역 */
+        .scrollable-content {
             flex: 1;
             overflow-y: auto;
-            padding-bottom: 100px; /* 입력창 공간 확보 */
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 10px;
+            margin-bottom: 80px; /* 하단 입력창 공간 확보 */
         }
-        /* 입력창 컨테이너를 하단에 고정 */
-        .input-container {
+        /* 고정된 하단 입력창 */
+        .fixed-footer {
             position: fixed;
             bottom: 0;
             left: 0;
             width: 100%;
-            background-color: white;
+            background-color: #f9f9f9;
             padding: 10px;
             border-top: 1px solid #ddd;
+            box-shadow: 0 -2px 5px rgba(0, 0, 0, 0.1);
         }
         </style>
     """, unsafe_allow_html=True)
@@ -44,13 +48,14 @@ def main():
     # Session State 초기화
     if "messages" not in st.session_state:
         st.session_state.messages = []
+    if "user_input" not in st.session_state:
+        st.session_state.user_input = ""
 
     # Sidebar - 파일 업로드
     st.sidebar.title("📂 논문 업로드")
     uploaded_file = st.sidebar.file_uploader("PDF 파일을 업로드하세요", type=["pdf"])
     
     if uploaded_file is not None:
-        # 파일 저장 및 텍스트 로드
         loader = SecureFileLoader()
         file_path = os.path.join(loader.base_dir, uploaded_file.name)
         try:
@@ -69,10 +74,8 @@ def main():
             st.sidebar.error(f"⚠️ PDF 로딩 오류: {e}")
             return
 
-    # 채팅 UI 설정
-    st.markdown('<div class="content">', unsafe_allow_html=True)
-
-    # 채팅 기록 표시
+    # 질문 내역 스크롤 영역
+    st.markdown('<div class="scrollable-content">', unsafe_allow_html=True)
     for message in st.session_state.messages:
         if message["type"] == "user":
             st.markdown(f"""
@@ -90,7 +93,6 @@ def main():
                 </div>
             </div>
             """, unsafe_allow_html=True)
-
     st.markdown('</div>', unsafe_allow_html=True)
 
     # 질문 처리 함수
@@ -104,7 +106,6 @@ def main():
             st.warning("⚠️ 먼저 논문을 업로드해 주세요.")
             return
 
-        # QnAService 초기화
         if "qna_service" not in st.session_state:
             try:
                 st.session_state.qna_service = QnAService(st.session_state.pdf_text)
@@ -114,7 +115,6 @@ def main():
 
         qna_service = st.session_state.qna_service
 
-        # 질문 처리
         try:
             answer = qna_service.get_answer(preprocess_text(question))
             st.session_state.messages.append({"type": "user", "content": question})
@@ -122,13 +122,22 @@ def main():
         except Exception as e:
             st.error(f"⚠️ 답변 생성 중 오류: {e}")
 
-        # 입력창 초기화
         st.session_state.user_input = ""
 
-    # 입력창 (Enter로 자동 처리)
+    # 고정된 하단 바 추가
+    st.markdown("""
+        <div class="fixed-footer">
+            <form action="#" method="post">
+    """, unsafe_allow_html=True)
+
     with st.form("question_form", clear_on_submit=True):
         st.text_input("질문을 입력하세요", placeholder="논문에 대해 궁금한 점을 입력하세요...", key="user_input")
         submitted = st.form_submit_button("📤 질문하기", on_click=handle_question)
+
+    st.markdown("""
+            </form>
+        </div>
+    """, unsafe_allow_html=True)
 
 if __name__ == "__main__":
     main()
