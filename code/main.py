@@ -26,8 +26,8 @@ logging.basicConfig(
 mime = magic.Magic(mime=True)
 
 @st.cache_data(show_spinner=False)
-def load_pdf_cached(loader, file_path):
-    return loader.load_pdf(file_path)
+def load_pdf_cached(_loader, file_path):
+    return _loader.load_pdf(file_path)
 
 def validate_pdf(file_path):
     """
