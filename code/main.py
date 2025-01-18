@@ -8,67 +8,100 @@ from utils.helper_functions import preprocess_text
 # 환경 변수 로드
 load_dotenv()
 
+# 메인 함수
 def main():
     st.set_page_config(page_title="논문 Q&A 시스템", layout="wide")
     st.title("📄 논문 Q&A 시스템")
 
-    col1, col2 = st.columns([1, 2])
+    # Sidebar - 파일 업로드
+    st.sidebar.title("📂 논문 업로드")
+    uploaded_file = st.sidebar.file_uploader("PDF 파일을 업로드하세요", type=["pdf"])
+    
+    if uploaded_file is not None:
+        # 파일 저장 및 텍스트 로드
+        loader = SecureFileLoader()
+        file_path = os.path.join(loader.base_dir, uploaded_file.name)
+        try:
+            with open(file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            st.sidebar.success("✅ 파일 업로드 완료!")
+        except Exception as e:
+            st.sidebar.error(f"⚠️ 파일 업로드 중 오류 발생: {e}")
+            return
 
-    with col1:
-        # 파일 업로드
-        uploaded_file = st.file_uploader("📂 논문 PDF 업로드", type=["pdf"])
-        if uploaded_file is not None:
-            loader = SecureFileLoader()
-            file_path = os.path.join(loader.base_dir, uploaded_file.name)
+        try:
+            pdf_text = loader.load_pdf(uploaded_file.name)
+            st.session_state.pdf_text = pdf_text
+            st.sidebar.text_area("📄 논문 내용 미리보기", pdf_text[:500], height=200, disabled=True)  # 미리보기
+        except Exception as e:
+            st.sidebar.error(f"⚠️ PDF 로딩 오류: {e}")
+            return
+
+    # 채팅 UI 설정
+    st.write("### 💬 논문과 대화하기")
+
+    # 대화 저장 상태 초기화
+    if "messages" not in st.session_state:
+        st.session_state.messages = []
+
+    # 채팅 기록 표시
+    for message in st.session_state.messages:
+        if message["type"] == "user":
+            st.markdown(f"""
+            <div style="text-align: right; margin: 10px 0;">
+                <div style="display: inline-block; padding: 10px; border-radius: 10px; background-color: #dcf8c6;">
+                    {message["content"]}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+        else:
+            st.markdown(f"""
+            <div style="text-align: left; margin: 10px 0;">
+                <div style="display: inline-block; padding: 10px; border-radius: 10px; background-color: #f1f0f0;">
+                    {message["content"]}
+                </div>
+            </div>
+            """, unsafe_allow_html=True)
+
+    # Enter로 질문 처리
+    def handle_question():
+        question = st.session_state["user_input"]
+        if not question.strip():
+            st.warning("⚠️ 질문을 입력해 주세요.")
+            return
+
+        if "pdf_text" not in st.session_state:
+            st.warning("⚠️ 먼저 논문을 업로드해 주세요.")
+            return
+
+        # QnAService 초기화
+        if "qna_service" not in st.session_state:
             try:
-                with open(file_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-                st.success("✅ 파일 업로드 완료!")
+                st.session_state.qna_service = QnAService(st.session_state.pdf_text)
             except Exception as e:
-                st.error(f"⚠️ 파일 업로드 중 오류 발생: {e}")
+                st.error(f"⚠️ QnA 서비스 초기화 오류: {e}")
                 return
 
-            # PDF 텍스트 로드
-            try:
-                pdf_text = loader.load_pdf(uploaded_file.name)
-                # 세션 상태에 논문 내용 저장
-                st.session_state.pdf_text = pdf_text
-                st.text_area("📝 논문 내용", pdf_text, height=300)
-            except Exception as e:
-                st.error(f"⚠️ PDF 로딩 오류: {e}")
-                return
+        qna_service = st.session_state.qna_service
 
-    with col2:
-        # 질문 입력
-        question = st.text_input("❓ 질문을 입력하세요")
-        if st.button("🔍 답변"):
-            if 'pdf_text' not in st.session_state:
-                st.warning("⚠️ 먼저 논문을 업로드해 주세요.")
-                return
-            if not question.strip():
-                st.warning("⚠️ 질문을 입력해 주세요.")
-                return
+        # 질문 처리
+        try:
+            answer = qna_service.get_answer(preprocess_text(question))
+            st.session_state.messages.append({"type": "user", "content": question})
+            st.session_state.messages.append({"type": "bot", "content": answer})
+        except Exception as e:
+            st.error(f"⚠️ 답변 생성 중 오류: {e}")
 
-            # QnAService를 세션 상태에 저장하거나 불러오기
-            if 'qna_service' not in st.session_state:
-                try:
-                    # 세션 상태에 QnAService 인스턴스 저장
-                    st.session_state.qna_service = QnAService(st.session_state.pdf_text)
-                except Exception as e:
-                    st.error(f"⚠️ QnA 서비스 초기화 오류: {e}")
-                    return
+        # 입력창 초기화
+        st.session_state["user_input"] = ""
 
-            qna_service = st.session_state.qna_service
+        # 새로고침 없이 메시지 업데이트
+        st.experimental_rerun()
 
-            # 질문 전처리
-            processed_question = preprocess_text(question)
-            
-            # 답변 생성
-            try:
-                answer = qna_service.get_answer(processed_question)
-                st.write("📝 **답변:**", answer)
-            except Exception as e:
-                st.error(f"⚠️ 답변 생성 중 오류: {e}")
+    # 입력창 (Enter로 자동 처리)
+    with st.form("question_form", clear_on_submit=True):
+        user_input = st.text_input("질문을 입력하세요", placeholder="논문에 대해 궁금한 점을 입력하세요...", key="user_input")
+        submitted = st.form_submit_button("📤 질문하기", on_click=handle_question)
 
 if __name__ == "__main__":
     main()
