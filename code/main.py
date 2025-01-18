@@ -10,7 +10,7 @@ load_dotenv()
 
 def main():
     st.set_page_config(page_title="논문 GPT", layout="wide")
-    st.title("📄 논문 Q&A 시스템")
+    st.title("📄 논문 GPT")
 
     # Session State 초기화
     if "messages" not in st.session_state:
