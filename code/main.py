@@ -9,7 +9,7 @@ from utils.helper_functions import preprocess_text
 load_dotenv()
 
 def main():
-    st.set_page_config(page_title="논문 Q&A 시스템", layout="wide")
+    st.set_page_config(page_title="논문 GPT", layout="wide")
     st.title("📄 논문 Q&A 시스템")
 
     # Session State 초기화
