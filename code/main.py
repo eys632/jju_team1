@@ -6,7 +6,6 @@ from dotenv import load_dotenv
 from loaders.secure_file_loader import SecureFileLoader
 from services.qna_service import QnAService
 from utils.helper_functions import preprocess_text
-from functools import lru_cache
 import magic  # 파일 MIME 타입 확인을 위해 필요
 import shutil
 import re  # 정규표현식 사용
@@ -110,11 +109,9 @@ def main():
     with chat_container:
         for message in st.session_state.messages:
             if message["type"] == "user":
-                with st.chat_message("user"):
-                    st.markdown(message["content"])
+                st.markdown(f"**👤 질문:** {message['content']}")
             else:
-                with st.chat_message("assistant"):
-                    st.markdown(message["content"])
+                st.markdown(f"**🤖 답변:** {message['content']}")
 
     # 질문 처리 함수
     def handle_question(question):
@@ -140,12 +137,18 @@ def main():
         try:
             # 사용자 질문 추가
             st.session_state.messages.append({"type": "user", "content": question})
+            logging.info(f"질문 추가: {question}")
+
             # 답변 생성 중 표시
             with st.spinner("🕒 답변을 생성 중입니다..."):
                 answer = qna_service.get_answer(preprocess_text(question))
             # 답변 추가
             st.session_state.messages.append({"type": "assistant", "content": answer})
-            logging.info(f"질문 처리 성공: {question}")
+            logging.info(f"답변 추가: {answer}")
+
+            # 즉시 렌더링을 위해 rerun
+            st.experimental_rerun()
+
         except Exception as e:
             st.error("⚠️ 답변 생성 중 오류가 발생했습니다.")
             logging.error(f"답변 생성 오류: {e}")
