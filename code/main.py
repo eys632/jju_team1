@@ -1,6 +1,5 @@
 import streamlit as st
 import os
-import tempfile
 import logging
 from dotenv import load_dotenv
 from loaders.secure_file_loader import SecureFileLoader
@@ -24,8 +23,8 @@ logging.basicConfig(
 mime = magic.Magic(mime=True)
 
 @st.cache_data(show_spinner=False)
-def load_pdf_cached(_loader, file_path):
-    return _loader.load_pdf(file_path)
+def load_pdf_cached(_loader, filename):
+    return _loader.load_pdf(filename)
 
 def validate_pdf(file_path):
     """
@@ -62,6 +61,8 @@ def main():
         st.session_state.qna_service = None
     if "pdf_text" not in st.session_state:
         st.session_state.pdf_text = ""
+    if "generating_answer" not in st.session_state:
+        st.session_state.generating_answer = False
 
     # Sidebar - 파일 업로드
     st.sidebar.title("📂 논문 업로드")
@@ -69,39 +70,51 @@ def main():
 
     if uploaded_file is not None:
         filename = secure_filename_custom(uploaded_file.name)
+        loader = SecureFileLoader()
+        base_dir = loader.base_dir
+
+        # base_dir가 존재하지 않으면 생성
+        if not os.path.exists(base_dir):
+            try:
+                os.makedirs(base_dir)
+                logging.info(f"base_dir 생성: {base_dir}")
+            except Exception as e:
+                st.sidebar.error("⚠️ 파일을 저장할 디렉토리를 생성할 수 없습니다.")
+                logging.error(f"base_dir 생성 오류: {e}")
+                return
+
+        file_path = os.path.join(base_dir, filename)
         try:
-            with tempfile.TemporaryDirectory() as tmpdirname:
-                file_path = os.path.join(tmpdirname, filename)
-                with open(file_path, "wb") as f:
-                    f.write(uploaded_file.getbuffer())
-                logging.info(f"파일 업로드 성공: {filename}")
-
-                # 파일 유효성 검사
-                if not validate_pdf(file_path):
-                    st.sidebar.error("⚠️ 유효한 PDF 파일이 아닙니다.")
-                    logging.warning(f"유효하지 않은 PDF 파일 업로드: {filename}")
-                else:
-                    st.sidebar.success("✅ 파일 업로드 및 검증 완료!")
-
-                    # PDF 텍스트 로딩 (캐싱 사용)
-                    try:
-                        with st.spinner("📄 PDF 로딩 중..."):
-                            loader = SecureFileLoader()
-                            pdf_text = load_pdf_cached(loader, file_path)
-                        st.session_state.pdf_text = pdf_text
-                        st.sidebar.text_area(
-                            "📄 논문 내용 미리보기",
-                            pdf_text[:1000],  # 미리보기 텍스트 길이 조정
-                            height=300,
-                            disabled=True
-                        )
-                        logging.info(f"PDF 텍스트 로딩 성공: {filename}")
-                    except Exception as e:
-                        st.sidebar.error("⚠️ PDF 로딩 중 오류가 발생했습니다.")
-                        logging.error(f"PDF 로딩 오류 ({filename}): {e}")
+            with open(file_path, "wb") as f:
+                f.write(uploaded_file.getbuffer())
+            logging.info(f"파일 업로드 성공: {filename}")
         except Exception as e:
             st.sidebar.error("⚠️ 파일 업로드 중 오류가 발생했습니다.")
             logging.error(f"파일 업로드 오류: {e}")
+            return
+
+        # 파일 유효성 검사
+        if not validate_pdf(file_path):
+            st.sidebar.error("⚠️ 유효한 PDF 파일이 아닙니다.")
+            logging.warning(f"유효하지 않은 PDF 파일 업로드: {filename}")
+        else:
+            st.sidebar.success("✅ 파일 업로드 및 검증 완료!")
+
+            # PDF 텍스트 로딩 (캐싱 사용)
+            try:
+                with st.spinner("📄 PDF 로딩 중..."):
+                    pdf_text = load_pdf_cached(loader, filename)
+                st.session_state.pdf_text = pdf_text
+                st.sidebar.text_area(
+                    "📄 논문 내용 미리보기",
+                    pdf_text[:1000],  # 미리보기 텍스트 길이 조정
+                    height=300,
+                    disabled=True
+                )
+                logging.info(f"PDF 텍스트 로딩 성공: {filename}")
+            except Exception as e:
+                st.sidebar.error("⚠️ PDF 로딩 중 오류가 발생했습니다.")
+                logging.error(f"PDF 로딩 오류 ({filename}): {e}")
 
     # 질문 처리 함수
     def handle_question(question):
@@ -129,16 +142,17 @@ def main():
             st.session_state.messages.append({"type": "user", "content": question})
             logging.info(f"질문 추가: {question}")
 
-            # 답변 생성 중 표시 (스피너가 입력창 위에 나타나도록)
-            with st.container():
-                with st.spinner("🕒 답변을 생성 중입니다..."):
-                    answer = qna_service.get_answer(preprocess_text(question))
-                # 답변 추가
-                st.session_state.messages.append({"type": "assistant", "content": answer})
-                logging.info(f"답변 추가: {answer}")
-
+            # 답변 생성 중 표시
+            st.session_state.generating_answer = True
+            with st.spinner("🕒 답변을 생성 중입니다..."):
+                answer = qna_service.get_answer(preprocess_text(question))
+            # 답변 추가
+            st.session_state.messages.append({"type": "assistant", "content": answer})
+            st.session_state.generating_answer = False
+            logging.info(f"답변 추가: {answer}")
         except Exception as e:
             st.error("⚠️ 답변 생성 중 오류가 발생했습니다.")
+            st.session_state.generating_answer = False
             logging.error(f"답변 생성 오류: {e}")
 
     # Handle user input
@@ -148,10 +162,9 @@ def main():
 
     # 채팅 메시지 표시
     with st.container():
-        # 스피너를 입력창 위에 위치시키기 위해, 스피너 호출을 메시지 렌더링 전에 위치시킵니다.
-        # 하지만 스피너는 handle_question 내에서 사용되므로, 이 부분은 빈 컨테이너로 유지합니다.
-        # 따라서, 스피너가 입력창 위에 나타나지 않을 수 있습니다.
-        # Streamlit의 동기적 실행 특성상, 스피너 위치를 정확히 제어하기는 어렵습니다.
+        # 답변 생성 중 스피너 표시 (입력창 위에 위치)
+        if st.session_state.generating_answer:
+            st.spinner("🕒 답변을 생성 중입니다...")
 
         # 메시지 렌더링
         for message in st.session_state.messages:
@@ -161,7 +174,7 @@ def main():
                 st.markdown(f"**🤖 답변:** {message['content']}")
 
     # 파일 업로드 후 임시 디렉토리 정리
-    # tempfile.TemporaryDirectory()는 with 블록을 벗어나면 자동으로 삭제되므로 별도 처리 필요 없음
+    # SecureFileLoader의 base_dir에 파일을 저장하므로 별도 정리는 필요 없습니다.
 
 if __name__ == "__main__":
     main()
