@@ -1,5 +1,3 @@
-# QnA.py
-
 import os
 from dotenv import load_dotenv
 from loader import SecureFileLoader
@@ -9,7 +7,7 @@ from langchain.schema import SystemMessage, HumanMessage
 def run_qna():
     """
     1) .env 로드
-    2) data/QnA.yaml 로딩
+    2) data/QnA.yaml 및 data/research_paper.txt 로딩
     3) GPT 모델로 질문→답변 생성
     4) QnA.markdown 파일로 저장
     """
@@ -26,12 +24,24 @@ def run_qna():
     except Exception as e:
         print(f"QnA.yaml 파일 로드 중 오류 발생: {e}")
         return
-    
+
+    # 연구 논문 로딩
+    try:
+        research_paper = loader.load_text("research_paper.txt")
+    except Exception as e:
+        print(f"research_paper.txt 파일 로드 중 오류 발생: {e}")
+        research_paper = ""
+
     # 3) GPT 모델 초기화 (ChatGPT 계열)
     chat_model = ChatOpenAI(
         model_name="gpt-4o",
         temperature=0.0
     )
+
+    # 시스템 메시지 구성 (논문 내용 포함)
+    system_prompt = "You are a helpful assistant. Below is the content of a research paper to help you answer the following questions:\n\n"
+    system_prompt += research_paper
+    system_message = SystemMessage(content=system_prompt)
     
     # 4) 질문 목록 가져오기
     questions = qna_data.get("questions", [])
@@ -48,15 +58,10 @@ def run_qna():
         if not question:
             print(f"[WARNING] 질문이 비어있습니다 (id: {q_id})")
             continue
-    
-        # ChatGPT에 전달할 메시지 구성
-        system_prompt = "You are a helpful assistant."
-        user_prompt = question
-    
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_prompt)
-        ]
+
+        # 질문 메시지 생성
+        user_message = HumanMessage(content=question)
+        messages = [system_message, user_message]
     
         # GPT 호출
         try:
