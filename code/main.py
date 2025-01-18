@@ -43,9 +43,7 @@ def main():
 
     # Session State 초기화
     if "messages" not in st.session_state:
-        st.session_state["messages"] = []
-    if "user_input" not in st.session_state:
-        st.session_state["user_input"] = ""
+        st.session_state.messages = []
 
     # Sidebar - 파일 업로드
     st.sidebar.title("📂 논문 업로드")
@@ -65,7 +63,7 @@ def main():
 
         try:
             pdf_text = loader.load_pdf(uploaded_file.name)
-            st.session_state["pdf_text"] = pdf_text
+            st.session_state.pdf_text = pdf_text
             st.sidebar.text_area("📄 논문 내용 미리보기", pdf_text[:500], height=200, disabled=True)  # 미리보기
         except Exception as e:
             st.sidebar.error(f"⚠️ PDF 로딩 오류: {e}")
@@ -75,7 +73,7 @@ def main():
     st.markdown('<div class="content">', unsafe_allow_html=True)
 
     # 채팅 기록 표시
-    for message in st.session_state["messages"]:
+    for message in st.session_state.messages:
         if message["type"] == "user":
             st.markdown(f"""
             <div style="text-align: right; margin: 10px 0;">
@@ -95,9 +93,9 @@ def main():
 
     st.markdown('</div>', unsafe_allow_html=True)
 
-    # Enter로 질문 처리
+    # 질문 처리 함수
     def handle_question():
-        question = st.session_state["user_input"]
+        question = st.session_state.user_input
         if not question.strip():
             st.warning("⚠️ 질문을 입력해 주세요.")
             return
@@ -109,34 +107,28 @@ def main():
         # QnAService 초기화
         if "qna_service" not in st.session_state:
             try:
-                st.session_state["qna_service"] = QnAService(st.session_state["pdf_text"])
+                st.session_state.qna_service = QnAService(st.session_state.pdf_text)
             except Exception as e:
                 st.error(f"⚠️ QnA 서비스 초기화 오류: {e}")
                 return
 
-        qna_service = st.session_state["qna_service"]
+        qna_service = st.session_state.qna_service
 
         # 질문 처리
         try:
             answer = qna_service.get_answer(preprocess_text(question))
-            st.session_state["messages"].append({"type": "user", "content": question})
-            st.session_state["messages"].append({"type": "bot", "content": answer})
+            st.session_state.messages.append({"type": "user", "content": question})
+            st.session_state.messages.append({"type": "bot", "content": answer})
         except Exception as e:
             st.error(f"⚠️ 답변 생성 중 오류: {e}")
 
         # 입력창 초기화
-        st.session_state["user_input"] = ""
+        st.session_state.user_input = ""
 
-    # 입력창 (하단 고정)
-    st.markdown('<div class="input-container">', unsafe_allow_html=True)
+    # 입력창 (Enter로 자동 처리)
     with st.form("question_form", clear_on_submit=True):
         st.text_input("질문을 입력하세요", placeholder="논문에 대해 궁금한 점을 입력하세요...", key="user_input")
-        submitted = st.form_submit_button("📤 질문하기")
-
-        # 질문 처리 호출
-        if submitted:
-            handle_question()
-    st.markdown('</div>', unsafe_allow_html=True)
+        submitted = st.form_submit_button("📤 질문하기", on_click=handle_question)
 
 if __name__ == "__main__":
     main()
