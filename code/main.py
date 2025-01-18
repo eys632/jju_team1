@@ -16,8 +16,6 @@ def main():
     # Session State 초기화
     if "messages" not in st.session_state:
         st.session_state.messages = []
-    if "user_input" not in st.session_state:
-        st.session_state.user_input = ""
 
     # Sidebar - 파일 업로드
     st.sidebar.title("📂 논문 업로드")
@@ -65,7 +63,7 @@ def main():
             </div>
             """, unsafe_allow_html=True)
 
-    # Enter로 질문 처리
+    # 질문 처리 함수
     def handle_question():
         question = st.session_state.user_input
         if not question.strip():
@@ -94,17 +92,8 @@ def main():
         except Exception as e:
             st.error(f"⚠️ 답변 생성 중 오류: {e}")
 
-        # 입력창 초기화
-        st.session_state.user_input = ""
-
     # 입력창 (Enter로 자동 처리)
-    with st.form("question_form", clear_on_submit=True):
-        st.text_input("질문을 입력하세요", placeholder="논문에 대해 궁금한 점을 입력하세요...", key="user_input")
-        submitted = st.form_submit_button("📤 질문하기")
-
-        # 질문 처리 호출
-        if submitted:
-            handle_question()
+    st.text_input("질문을 입력하세요", placeholder="논문에 대해 궁금한 점을 입력하세요...", key="user_input", on_change=handle_question)
 
 if __name__ == "__main__":
     main()
