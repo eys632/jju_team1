@@ -104,15 +104,6 @@ def main():
             st.sidebar.error("⚠️ 파일 업로드 중 오류가 발생했습니다.")
             logging.error(f"파일 업로드 오류: {e}")
 
-    # 채팅 메시지 표시
-    chat_container = st.container()
-    with chat_container:
-        for message in st.session_state.messages:
-            if message["type"] == "user":
-                st.markdown(f"**👤 질문:** {message['content']}")
-            else:
-                st.markdown(f"**🤖 답변:** {message['content']}")
-
     # 질문 처리 함수
     def handle_question(question):
         if not question.strip():
@@ -146,9 +137,6 @@ def main():
             st.session_state.messages.append({"type": "assistant", "content": answer})
             logging.info(f"답변 추가: {answer}")
 
-            # 즉시 렌더링을 위해 rerun
-            st.experimental_rerun()
-
         except Exception as e:
             st.error("⚠️ 답변 생성 중 오류가 발생했습니다.")
             logging.error(f"답변 생성 오류: {e}")
@@ -157,6 +145,15 @@ def main():
     user_input = st.chat_input("질문을 입력하세요...")
     if user_input:
         handle_question(user_input)
+
+    # 채팅 메시지 표시
+    chat_container = st.container()
+    with chat_container:
+        for message in st.session_state.messages:
+            if message["type"] == "user":
+                st.markdown(f"**👤 질문:** {message['content']}")
+            else:
+                st.markdown(f"**🤖 답변:** {message['content']}")
 
     # 파일 업로드 후 임시 디렉토리 정리
     # tempfile.TemporaryDirectory()는 with 블록을 벗어나면 자동으로 삭제되므로 별도 처리 필요 없음
