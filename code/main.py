@@ -7,7 +7,6 @@ from loaders.secure_file_loader import SecureFileLoader
 from services.qna_service import QnAService
 from utils.helper_functions import preprocess_text
 import magic  # 파일 MIME 타입 확인을 위해 필요
-import shutil
 import re  # 정규표현식 사용
 
 # 환경 변수 로드
@@ -63,6 +62,8 @@ def main():
         st.session_state.qna_service = None
     if "pdf_text" not in st.session_state:
         st.session_state.pdf_text = ""
+    if "generating_answer" not in st.session_state:
+        st.session_state.generating_answer = False
 
     # Sidebar - 파일 업로드
     st.sidebar.title("📂 논문 업로드")
@@ -131,29 +132,42 @@ def main():
             logging.info(f"질문 추가: {question}")
 
             # 답변 생성 중 표시
+            st.session_state.generating_answer = True
             with st.spinner("🕒 답변을 생성 중입니다..."):
                 answer = qna_service.get_answer(preprocess_text(question))
             # 답변 추가
             st.session_state.messages.append({"type": "assistant", "content": answer})
+            st.session_state.generating_answer = False
             logging.info(f"답변 추가: {answer}")
-
         except Exception as e:
             st.error("⚠️ 답변 생성 중 오류가 발생했습니다.")
+            st.session_state.generating_answer = False
             logging.error(f"답변 생성 오류: {e}")
 
-    # 하단 고정 입력 창
+    # Handle user input
     user_input = st.chat_input("질문을 입력하세요...")
     if user_input:
         handle_question(user_input)
 
-    # 채팅 메시지 표시
-    chat_container = st.container()
-    with chat_container:
+    # **스피너를 입력창 위에 표시하기 위한 레이아웃 조정**
+    # 스피너를 입력창 위에 표시하기 위해, 메시지 렌더링과 스피너 표시를 입력창 위에 위치시킵니다.
+    # 이를 위해, 메시지와 스피너를 별도의 컨테이너에 배치합니다.
+
+    # 컨테이너 생성
+    with st.container():
+        # 채팅 메시지 표시
         for message in st.session_state.messages:
             if message["type"] == "user":
                 st.markdown(f"**👤 질문:** {message['content']}")
             else:
                 st.markdown(f"**🤖 답변:** {message['content']}")
+
+        # 답변 생성 중 스피너 표시
+        if st.session_state.generating_answer:
+            st.spinner("🕒 답변을 생성 중입니다...")
+
+    # **입력창은 아래에 위치**
+    # 이미 입력창은 스크립트의 마지막에 위치하여, 컨테이너 위에 표시됩니다.
 
     # 파일 업로드 후 임시 디렉토리 정리
     # tempfile.TemporaryDirectory()는 with 블록을 벗어나면 자동으로 삭제되므로 별도 처리 필요 없음
