@@ -1,12 +1,14 @@
+# main.py
 import streamlit as st
 import os
 import logging
 from dotenv import load_dotenv
-from loaders.secure_file_loader import SecureFileLoader
+from preprocess import load_index
 from services.qna_service import QnAService
 from utils.helper_functions import preprocess_text
-import magic  # 파일 MIME 타입 확인을 위해 필요
-import re  # 정규표현식 사용
+from sentence_transformers import SentenceTransformer
+import faiss
+import pickle
 
 # 환경 변수 로드
 load_dotenv()
@@ -18,31 +20,6 @@ logging.basicConfig(
     format='%(asctime)s - %(levelname)s - %(message)s',
     level=logging.INFO
 )
-
-# MIME 타입 확인을 위한 매직 인스턴스 생성
-mime = magic.Magic(mime=True)
-
-@st.cache_data(show_spinner=False)
-def load_pdf_cached(_loader, filename):
-    return _loader.load_pdf(filename)
-
-def validate_pdf(file_path):
-    """
-    업로드된 파일이 실제 PDF인지 확인하는 함수
-    """
-    try:
-        mime_type = mime.from_file(file_path)
-        if mime_type != 'application/pdf':
-            return False
-        # 추가적인 PDF 파일 서명(header) 확인 가능
-        with open(file_path, 'rb') as f:
-            header = f.read(4)
-            if header != b'%PDF':
-                return False
-        return True
-    except Exception as e:
-        logging.error(f"파일 검증 중 오류 발생: {e}")
-        return False
 
 def secure_filename_custom(filename):
     """
@@ -61,8 +38,8 @@ def main():
         st.session_state.qna_service = None
     if "pdf_text" not in st.session_state:
         st.session_state.pdf_text = ""
-    if "generating_answer" not in st.session_state:
-        st.session_state.generating_answer = False
+    if "index_built" not in st.session_state:
+        st.session_state.index_built = False
 
     # Sidebar - 파일 업로드
     st.sidebar.title("📂 논문 업로드")
@@ -70,8 +47,7 @@ def main():
 
     if uploaded_file is not None:
         filename = secure_filename_custom(uploaded_file.name)
-        loader = SecureFileLoader()
-        base_dir = loader.base_dir
+        base_dir = "uploaded_pdfs"
 
         # base_dir가 존재하지 않으면 생성
         if not os.path.exists(base_dir):
@@ -99,19 +75,18 @@ def main():
             logging.warning(f"유효하지 않은 PDF 파일 업로드: {filename}")
         else:
             st.sidebar.success("✅ 파일 업로드 및 검증 완료!")
+            st.session_state.pdf_text = filename  # 파일명 저장
 
-            # PDF 텍스트 로딩 (캐싱 사용)
+            # PDF 텍스트 로딩 및 인덱스 구축
             try:
-                with st.spinner("📄 PDF 로딩 중..."):
-                    pdf_text = load_pdf_cached(loader, filename)
-                st.session_state.pdf_text = pdf_text
-                st.sidebar.text_area(
-                    "📄 논문 내용 미리보기",
-                    pdf_text[:1000],  # 미리보기 텍스트 길이 조정
-                    height=300,
-                    disabled=True
-                )
-                logging.info(f"PDF 텍스트 로딩 성공: {filename}")
+                if not st.session_state.index_built:
+                    st.sidebar.info("📄 PDF 로딩 및 인덱스 생성 중...")
+                    paragraphs, index = load_index(file_path)
+                    st.session_state.index = index
+                    st.session_state.paragraphs = paragraphs
+                    st.session_state.index_built = True
+                    st.sidebar.success("✅ PDF 로딩 및 인덱스 생성 완료!")
+                    logging.info(f"PDF 텍스트 로딩 및 인덱스 생성 성공: {filename}")
             except Exception as e:
                 st.sidebar.error("⚠️ PDF 로딩 중 오류가 발생했습니다.")
                 logging.error(f"PDF 로딩 오류 ({filename}): {e}")
@@ -126,55 +101,70 @@ def main():
             st.warning("⚠️ 먼저 논문을 업로드해 주세요.")
             return
 
-        if st.session_state.qna_service is None:
-            try:
-                st.session_state.qna_service = QnAService(st.session_state.pdf_text)
-                logging.info("QnA 서비스 초기화 성공")
-            except Exception as e:
-                st.error("⚠️ QnA 서비스 초기화 중 오류가 발생했습니다.")
-                logging.error(f"QnA 서비스 초기화 오류: {e}")
-                return
-
-        qna_service = st.session_state.qna_service
+        if not st.session_state.index_built:
+            st.warning("⚠️ 논문 인덱스가 아직 생성되지 않았습니다. 잠시만 기다려 주세요.")
+            return
 
         try:
-            # 사용자 질문 추가
-            st.session_state.messages.append({"type": "user", "content": question})
-            logging.info(f"질문 추가: {question}")
+            # 질문 임베딩 생성
+            model = SentenceTransformer('all-MiniLM-L6-v2')
+            question_embedding = model.encode([question])
 
-            # 답변 생성 중 표시
-            st.session_state.generating_answer = True
-            with st.spinner("🕒 답변을 생성 중입니다..."):
-                answer = qna_service.get_answer(preprocess_text(question))
-            # 답변 추가
+            # FAISS 인덱스 로드
+            index = st.session_state.index
+            paragraphs = st.session_state.paragraphs
+
+            # 유사한 상위 5개 단락 검색
+            D, I = index.search(question_embedding, 5)
+            relevant_paragraphs = [paragraphs[i] for i in I[0]]
+
+            # 관련 단락 결합
+            context = "\n".join(relevant_paragraphs)
+
+            # QnA 서비스 초기화
+            qna_service = QnAService(context)
+            answer = qna_service.get_answer(preprocess_text(question))
+
+            # 사용자 질문 및 답변 추가
+            st.session_state.messages.append({"type": "user", "content": question})
             st.session_state.messages.append({"type": "assistant", "content": answer})
-            st.session_state.generating_answer = False
-            logging.info(f"답변 추가: {answer}")
+            logging.info(f"질문 처리 성공: {question}")
+
         except Exception as e:
             st.error("⚠️ 답변 생성 중 오류가 발생했습니다.")
-            st.session_state.generating_answer = False
             logging.error(f"답변 생성 오류: {e}")
 
     # Handle user input
     user_input = st.chat_input("질문을 입력하세요...")
     if user_input:
-        handle_question(user_input)
+        with st.spinner("🕒 답변을 생성 중입니다..."):
+            handle_question(user_input)
 
     # 채팅 메시지 표시
     with st.container():
-        # 답변 생성 중 스피너 표시 (입력창 위에 위치)
-        if st.session_state.generating_answer:
-            st.spinner("🕒 답변을 생성 중입니다...")
-
-        # 메시지 렌더링
         for message in st.session_state.messages:
             if message["type"] == "user":
                 st.markdown(f"**👤 질문:** {message['content']}")
             else:
                 st.markdown(f"**🤖 답변:** {message['content']}")
 
-    # 파일 업로드 후 임시 디렉토리 정리
-    # SecureFileLoader의 base_dir에 파일을 저장하므로 별도 정리는 필요 없습니다.
+def validate_pdf(file_path):
+    """
+    업로드된 파일이 실제 PDF인지 확인하는 함수
+    """
+    try:
+        mime_type = magic.from_file(file_path, mime=True)
+        if mime_type != 'application/pdf':
+            return False
+        # 추가적인 PDF 파일 서명(header) 확인 가능
+        with open(file_path, 'rb') as f:
+            header = f.read(4)
+            if header != b'%PDF':
+                return False
+        return True
+    except Exception as e:
+        logging.error(f"파일 검증 중 오류 발생: {e}")
+        return False
 
 if __name__ == "__main__":
     main()

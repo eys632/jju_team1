@@ -1,32 +1,30 @@
 # services/qna_service.py
 
-from langchain_openai import ChatOpenAI
-from langchain.schema import HumanMessage
+import openai
+import os
+from dotenv import load_dotenv
+
+load_dotenv()
 
 class QnAService:
-    def __init__(self, research_paper_content):
-        """
-        연구 논문 내용을 초기화하고 GPT 모델을 설정합니다.
-        """
-        self.chat_model = ChatOpenAI(
-            model_name="gpt-4o",  # 모델 이름 확인 필요 ("gpt-4o"가 올바른지 확인)
-            temperature=0.0
-        )
-        self.research_paper_content = research_paper_content
-
+    def __init__(self, context):
+        self.context = context
+        self.api_key = os.getenv("OPENAI_API_KEY")
+        if not self.api_key:
+            raise ValueError("OPENAI_API_KEY 환경 변수가 설정되지 않았습니다.")
+    
     def get_answer(self, question):
-        """
-        질문을 받아 논문 내용과 함께 GPT 모델을 통해 답변을 생성합니다.
-        """
-        # 논문 내용과 질문을 결합
-        combined_query = (
-            "아래는 연구 논문의 내용입니다. 이를 참고하여 질문에 답변해 주세요.\n\n"
-            + self.research_paper_content
-            + "\n\n"
-            + "질문: " + question
+        prompt = f"다음 논문 내용을 바탕으로 질문에 답변해주세요.\n\n논문 내용:\n{self.context}\n\n질문: {question}\n답변:"
+        
+        response = openai.Completion.create(
+            engine="text-davinci-003",  # 원하는 엔진으로 변경 가능
+            prompt=prompt,
+            max_tokens=500,
+            temperature=0.3,
+            top_p=1,
+            frequency_penalty=0,
+            presence_penalty=0
         )
-        messages = [
-            HumanMessage(content=combined_query)
-        ]
-        response = self.chat_model.invoke(messages)
-        return response.content.strip()
+        
+        answer = response.choices[0].text.strip()
+        return answer
