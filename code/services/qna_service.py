@@ -2,46 +2,29 @@
 
 from langchain_openai import ChatOpenAI
 from langchain.schema import SystemMessage, HumanMessage
-import logging
-from .search_service import SearchService
-
-# 로깅 설정
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 class QnAService:
-    def __init__(self, data: str):
-        self.data = data
+    def __init__(self, research_paper_content):
+        """
+        연구 논문 내용을 초기화하고 GPT 모델을 설정합니다.
+        """
         self.chat_model = ChatOpenAI(
-            model_name="gpt-4",
+            model_name="gpt-4o",
             temperature=0.0
         )
-        self.search_service = SearchService(data)
+        system_prompt = (
+            "You are a helpful assistant. Below is the content of a research paper to help you answer the following questions:\n\n"
+            + research_paper_content
+        )
+        self.system_message = SystemMessage(content=system_prompt)
 
-    def get_answer(self, question: str) -> str:
+    def get_answer(self, question):
         """
-        질문에 대한 답변을 생성합니다.
-        :param question: 사용자의 질문
-        :return: 생성된 답변
+        질문을 받아 GPT 모델을 통해 답변을 생성합니다.
         """
-        system_prompt = "You are a helpful assistant."
-        user_prompt = question
-
-        # 관련 문서 검색
-        relevant_docs = self.search_service.search(user_prompt)
-        context = "\n".join(relevant_docs)
-
-        # ChatGPT에 전달할 메시지 구성
         messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=f"Context:\n{context}\n\nQuestion: {user_prompt}")
+            self.system_message,
+            HumanMessage(content=question)
         ]
-
-        try:
-            response = self.chat_model.invoke(messages)
-            answer = response.content.strip()
-            logger.info(f"Generated answer for question: {question}")
-            return answer
-        except Exception as e:
-            logger.error(f"Error generating answer for question '{question}': {e}")
-            return "Error generating response."
+        response = self.chat_model.invoke(messages)
+        return response.content.strip()
