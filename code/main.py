@@ -79,7 +79,6 @@ def main():
     if user_input:
         st.session_state.messages.append({"type": "user", "content": user_input})  # 사용자 메시지 추가
         handle_question(user_input)  # 질문 처리
-        st.experimental_rerun()  # 상태 업데이트 후 즉시 페이지 갱신
 
 if __name__ == "__main__":
     main()
